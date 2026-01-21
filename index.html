@@ -13,7 +13,7 @@
     <div id="root"></div>
     
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useRef } = React;
 
         // Lucide React Icons as inline SVGs
         const Calendar = ({ size = 24, className = '' }) => (
@@ -68,11 +68,39 @@
             </svg>
         );
 
+        const Download = ({ size = 24 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+        );
+
+        const Upload = ({ size = 24 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+        );
+
+        const AlertCircle = ({ size = 24 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+        );
+
         const SpacedRepetitionTracker = () => {
           const [topics, setTopics] = useState([]);
           const [newTopic, setNewTopic] = useState('');
           const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
           const [currentView, setCurrentView] = useState('today');
+          const [showNotification, setShowNotification] = useState(false);
+          const [notificationMessage, setNotificationMessage] = useState('');
+          const [notificationType, setNotificationType] = useState('success'); // success, error, warning
+          const fileInputRef = useRef(null);
 
           useEffect(() => {
             const saved = localStorage.getItem('spacedRepTopics');
@@ -116,6 +144,13 @@
             }
           }, [topics]);
 
+          const showNotificationMessage = (message, type = 'success') => {
+            setNotificationMessage(message);
+            setNotificationType(type);
+            setShowNotification(true);
+            setTimeout(() => setShowNotification(false), 3000);
+          };
+
           const intervals = [1, 2, 4, 8, 16, 32];
 
           const addTopic = () => {
@@ -130,10 +165,13 @@
             
             setTopics([...topics, topic]);
             setNewTopic('');
+            showNotificationMessage(`Added "${newTopic}"`, 'success');
           };
 
           const deleteTopic = (id) => {
+            const topic = topics.find(t => t.id === id);
             setTopics(topics.filter(t => t.id !== id));
+            showNotificationMessage(`Deleted "${topic.name}"`, 'success');
           };
 
           const markReviewed = (topicId) => {
@@ -146,6 +184,101 @@
               }
               return topic;
             }));
+            const topic = topics.find(t => t.id === topicId);
+            showNotificationMessage(`Reviewed "${topic.name}"! Next review scheduled.`, 'success');
+          };
+
+          const exportData = () => {
+            try {
+              const exportObj = {
+                version: "1.0",
+                exportDate: new Date().toISOString(),
+                topics: topics
+              };
+              
+              const dataStr = JSON.stringify(exportObj, null, 2);
+              const blob = new Blob([dataStr], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `spaced-repetition-backup-${new Date().toISOString().split('T')[0]}.json`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              URL.revokeObjectURL(url);
+              
+              showNotificationMessage(`Exported ${topics.length} topics successfully!`, 'success');
+            } catch (error) {
+              showNotificationMessage('Export failed. Please try again.', 'error');
+            }
+          };
+
+          const importData = (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              try {
+                const importedData = JSON.parse(e.target.result);
+                
+                // Check if it's the correct format
+                if (!importedData.topics || !Array.isArray(importedData.topics)) {
+                  showNotificationMessage('Invalid backup file format.', 'error');
+                  return;
+                }
+
+                // Ask for confirmation if there's existing data
+                if (topics.length > 0) {
+                  const confirmImport = window.confirm(
+                    `You have ${topics.length} existing topics. Import will REPLACE all current data.\n\n` +
+                    `Backup contains ${importedData.topics.length} topics.\n\n` +
+                    `Continue with import?`
+                  );
+                  
+                  if (!confirmImport) {
+                    showNotificationMessage('Import cancelled.', 'warning');
+                    return;
+                  }
+                }
+
+                setTopics(importedData.topics);
+                localStorage.setItem('spacedRepTopics', JSON.stringify(importedData.topics));
+                showNotificationMessage(`Successfully imported ${importedData.topics.length} topics!`, 'success');
+              } catch (error) {
+                showNotificationMessage('Failed to import. File may be corrupted.', 'error');
+              }
+            };
+            reader.readAsText(file);
+            
+            // Reset input so same file can be selected again
+            event.target.value = '';
+          };
+
+          const resetAllData = () => {
+            const confirmReset = window.confirm(
+              `⚠️ WARNING: This will DELETE all ${topics.length} topics permanently!\n\n` +
+              `This action CANNOT be undone.\n\n` +
+              `Are you absolutely sure?`
+            );
+            
+            if (confirmReset) {
+              const doubleConfirm = window.confirm(
+                `Last chance!\n\n` +
+                `Type "DELETE" in the next prompt to confirm deletion.`
+              );
+              
+              if (doubleConfirm) {
+                const finalConfirm = window.prompt('Type DELETE (all caps) to confirm:');
+                if (finalConfirm === 'DELETE') {
+                  setTopics([]);
+                  localStorage.removeItem('spacedRepTopics');
+                  showNotificationMessage('All data has been deleted.', 'warning');
+                } else {
+                  showNotificationMessage('Reset cancelled. Data is safe.', 'success');
+                }
+              }
+            }
           };
 
           const getNextReviewDate = (topic) => {
@@ -294,16 +427,74 @@
 
           return (
             <div className="max-w-4xl mx-auto p-6 bg-gray-50 min-h-screen">
+              {/* Notification Toast */}
+              {showNotification && (
+                <div className={`fixed top-4 right-4 z-50 max-w-md rounded-lg shadow-lg p-4 ${
+                  notificationType === 'success' ? 'bg-green-500' :
+                  notificationType === 'error' ? 'bg-red-500' :
+                  'bg-yellow-500'
+                } text-white animate-slide-in`}>
+                  <div className="flex items-center gap-2">
+                    {notificationType === 'success' && <Check size={20} />}
+                    {notificationType === 'error' && <AlertCircle size={20} />}
+                    {notificationType === 'warning' && <AlertCircle size={20} />}
+                    <p className="font-medium">{notificationMessage}</p>
+                  </div>
+                </div>
+              )}
+
               <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-                <div className="flex items-center gap-3 mb-6">
-                  <Brain className="text-blue-600" size={32} />
-                  <div>
-                    <h1 className="text-2xl font-bold text-gray-800">
-                      Spaced Repetition Tracker
-                    </h1>
-                    <p className="text-sm text-gray-600">
-                      Review at optimal intervals: 1, 2, 4, 8, 16, 32 days
-                    </p>
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <Brain className="text-blue-600" size={32} />
+                    <div>
+                      <h1 className="text-2xl font-bold text-gray-800">
+                        Spaced Repetition Tracker
+                      </h1>
+                      <p className="text-sm text-gray-600">
+                        Review at optimal intervals: 1, 2, 4, 8, 16, 32 days
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Import/Export Buttons */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={exportData}
+                      disabled={topics.length === 0}
+                      className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-sm"
+                      title="Export all topics to JSON file"
+                    >
+                      <Download size={16} />
+                      Export
+                    </button>
+                    
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".json"
+                      onChange={importData}
+                      className="hidden"
+                    />
+                    
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+                      title="Import topics from JSON file"
+                    >
+                      <Upload size={16} />
+                      Import
+                    </button>
+
+                    <button
+                      onClick={resetAllData}
+                      disabled={topics.length === 0}
+                      className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-sm"
+                      title="Delete all topics permanently"
+                    >
+                      <Trash2 size={16} />
+                      Reset
+                    </button>
                   </div>
                 </div>
 
@@ -428,65 +619,4 @@
               ) : (
                 <div>
                   {topics.length === 0 ? (
-                    <div className="bg-white rounded-lg p-8 text-center">
-                      <Brain className="mx-auto text-gray-400 mb-3" size={48} />
-                      <h3 className="text-lg font-semibold text-gray-700 mb-2">
-                        No topics yet
-                      </h3>
-                      <p className="text-gray-600">
-                        Add your first topic to start tracking reviews
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      {overdue.length > 0 && (
-                        <div className="mb-6">
-                          <h2 className="text-lg font-bold text-red-600 mb-3">Overdue</h2>
-                          {overdue.map(topic => (
-                            <TopicCard key={topic.id} topic={topic} status="overdue" />
-                          ))}
-                        </div>
-                      )}
-                      
-                      {dueToday.length > 0 && (
-                        <div className="mb-6">
-                          <h2 className="text-lg font-bold text-blue-600 mb-3">Due Today</h2>
-                          {dueToday.map(topic => (
-                            <TopicCard key={topic.id} topic={topic} status="today" />
-                          ))}
-                        </div>
-                      )}
-                      
-                      {upcoming.length > 0 && (
-                        <div>
-                          <h2 className="text-lg font-bold text-gray-700 mb-3">Upcoming</h2>
-                          {upcoming.map(topic => (
-                            <TopicCard key={topic.id} topic={topic} status="upcoming" />
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
-
-              <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h3 className="font-semibold text-blue-900 mb-2">📚 How to Use</h3>
-                <ul className="text-sm text-blue-800 space-y-1">
-                  <li>• Add topics you've learned with the date you learned them</li>
-                  <li>• Review topics when they show up as "Due Today" or "Overdue"</li>
-                  <li>• Click "Done" after reviewing to schedule the next review</li>
-                  <li>• Review intervals: Day 1, 2, 4, 8, 16, 32, then monthly</li>
-                  <li>• Data is saved in your browser (won't be lost on refresh)</li>
-                </ul>
-              </div>
-            </div>
-          );
-        };
-
-        ReactDOM.createRoot(document.getElementById('root')).render(
-            <SpacedRepetitionTracker />
-        );
-    </script>
-</body>
-</html>
+                    <div className="bg-white rounded-lg p
