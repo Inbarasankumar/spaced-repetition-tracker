@@ -1,0 +1,6 @@
+name = "cdn-demo"
+compatibility_date = "2026-01-31"
+
+# Configuration for static site deployment
+[assets]
+directory = "."
