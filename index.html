@@ -23,7 +23,7 @@
         const SUPABASE_ANON_KEY = 'sb_publishable_rt-6TVDI1FYYTkEHci3r5w_HPcZ7hPz';
         const ROW_ID = 1; // one fixed row holds all your data
 
-        const supa = (window.supabase && SUPABASE_URL.startsWith('https://') && !SUPABASE_URL.includes('sjnitfsuzzhwuqxmzptn'))
+        const supa = (window.supabase && SUPABASE_URL.startsWith('https://') && !SUPABASE_URL.includes('YOUR_PROJECT'))
           ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
           : null;
         if (!supa) console.warn('Supabase not configured - using localStorage only.');
