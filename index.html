@@ -24,8 +24,7 @@
 
          // ====== Supabase config (single user, no login) ======
          // 1. Create a free project at https://supabase.com
-         // 2. Settings -> API: copy the Project URL and the "anon
- public" key below.
+         // 2. Settings -> API: copy the Project URL and the "anonpublic" key below.
          const SUPABASE_URL = 'https://sjnitfsuzzhwuqxmzptn.supabase.co';
          const SUPABASE_ANON_KEY = 'sb_publishable_rt-6TVDI1FYYTkEHci3r5w_HPcZ7hPz';
          const ROW_ID = 1; // one fixed row holds all your data
@@ -36,8 +35,7 @@
            ? window.supabase.createClient(SUPABASE_URL,
  SUPABASE_ANON_KEY)
            : null;
-         if (!supa) console.warn('Supabase not configured - using
- localStorage only.');
+         if (!supa) console.warn('Supabase not configured - using localStorage only.');
 
          const Calendar = ({ size = 24, className = '' }) => (
              <svg xmlns="http://www.w3.org/2000/svg" width={size}
